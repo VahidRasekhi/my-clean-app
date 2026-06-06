@@ -10,7 +10,8 @@ dependencies:
   flutter:
     sdk: flutter
   shared_preferences: ^2.2.2
-  health_connector: ^2.4.0          # پکیج جدید برای دیتای سلامت
+  health_connector: 3.2.0
+  health_connector_hc_android: 3.2.0
 
 dev_dependencies:
   flutter_test:
@@ -18,3 +19,6 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+
+dependency_overrides:
+  health_connector_core: 3.2.0
