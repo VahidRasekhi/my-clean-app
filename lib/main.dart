@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:health_connector/health_connector.dart';
+import 'package:health/health.dart';
 import 'dart:async';
 
 void main() => runApp(const TradeHealthApp());
@@ -69,7 +69,7 @@ class TraderComparison {
   });
 }
 
-// ==================== صفحه احراز هویت (همون قبلی) ====================
+// ==================== صفحه احراز هویت ====================
 class AuthPage extends StatefulWidget {
   const AuthPage({super.key});
 
@@ -424,7 +424,7 @@ class _MainScreenState extends State<MainScreen> {
   }
 }
 
-// ==================== صفحه داشبورد سلامت (با دیتای واقعی از Health Connect) ====================
+// ==================== صفحه داشبورد سلامت (با دیتای واقعی از Health) ====================
 class HealthDashboard extends StatefulWidget {
   const HealthDashboard({super.key});
 
@@ -433,7 +433,7 @@ class HealthDashboard extends StatefulWidget {
 }
 
 class _HealthDashboardState extends State<HealthDashboard> {
-  HealthConnector? _connector;
+  HealthFactory? _health;
   bool _isHealthSupported = false;
   bool _isLoading = true;
 
@@ -441,109 +441,70 @@ class _HealthDashboardState extends State<HealthDashboard> {
   int _steps = 0;
   int _heartRate = 0;
   double _sleepHours = 0;
-  int _stressLevel = 5; // این رو از تست آمادگی میگیریم
+  int _stressLevel = 5;
 
   @override
   void initState() {
     super.initState();
-    _initializeHealthConnector();
+    _initializeHealth();
   }
 
-  Future<void> _initializeHealthConnector() async {
+  Future<void> _initializeHealth() async {
     setState(() => _isLoading = true);
 
     try {
-      // 1. چک کردن اینکه Health Connect روی گوشی هست یا نه
-      final status = await HealthConnector.getHealthPlatformStatus();
-
-      if (status != HealthPlatformStatus.available) {
-        setState(() {
-          _isHealthSupported = false;
-          _isLoading = false;
-        });
-        return;
-      }
-
-      // 2. ساخت کانکتور
-      final config = HealthConnectorConfig();
-      final connector = await HealthConnector.create(config);
-
-      // 3. درخواست مجوز برای خوندن دیتاها
-      final permissions = [
-        HealthDataType.steps.readPermission,        // قدم
-        HealthDataType.heartRate.readPermission,    // ضربان قلب
-        HealthDataType.sleep.readPermission,        // خواب
+      // درخواست مجوزها
+      final types = [
+        HealthDataType.STEPS,
+        HealthDataType.HEART_RATE,
+        HealthDataType.SLEEP_ASLEEP,
       ];
 
-      final results = await connector.requestPermissions(permissions);
+      final permissions = [
+        HealthDataAccess.READ,
+        HealthDataAccess.READ,
+        HealthDataAccess.READ,
+      ];
 
-      final granted = results.every((r) => r.status != PermissionStatus.denied);
+      _health = HealthFactory();
+      final granted = await _health!.requestAuthorization(types, permissions: permissions);
 
       if (granted) {
-        _connector = connector;
         _isHealthSupported = true;
-        await _fetchHealthData(connector);
+        await _fetchHealthData();
       } else {
         _isHealthSupported = false;
       }
     } catch (e) {
-      print('Error initializing Health Connector: $e');
+      print('Error initializing Health: $e');
       _isHealthSupported = false;
     } finally {
       setState(() => _isLoading = false);
     }
   }
 
-  Future<void> _fetchHealthData(HealthConnector connector) async {
+  Future<void> _fetchHealthData() async {
+    if (_health == null || !_isHealthSupported) return;
+
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
 
     try {
       // گرفتن قدم‌های امروز
-      final stepsResponse = await connector.readRecords(
-        HealthDataType.steps.readInTimeRange(
-          startTime: today,
-          endTime: now,
-        ),
-      );
-      _steps = stepsResponse.records.fold<int>(0, (sum, record) {
-        if (record is StepsRecord) {
-          return sum + (record.count.value as int);
-        }
-        return sum;
-      });
+      final stepsResult = await _health!.getHealthDataFromTypes(today, now, [HealthDataType.STEPS]);
+      _steps = stepsResult.fold<int>(0, (sum, point) => sum + point.value.toInt());
 
       // گرفتن ضربان قلب امروز (میانگین)
-      final heartRateResponse = await connector.readRecords(
-        HealthDataType.heartRate.readInTimeRange(
-          startTime: today,
-          endTime: now,
-        ),
-      );
-      final heartRates = <double>[];
-      for (final record in heartRateResponse.records) {
-        if (record is HeartRateRecord) {
-          heartRates.add(record.bpm.value);
-        }
-      }
-      if (heartRates.isNotEmpty) {
-        _heartRate = (heartRates.reduce((a, b) => a + b) / heartRates.length).round();
+      final heartRateResult = await _health!.getHealthDataFromTypes(today, now, [HealthDataType.HEART_RATE]);
+      if (heartRateResult.isNotEmpty) {
+        double avgHeartRate = heartRateResult.fold<double>(0, (sum, point) => sum + point.value) / heartRateResult.length;
+        _heartRate = avgHeartRate.round();
       }
 
       // گرفتن خواب دیشب
       final yesterdayStart = DateTime(now.year, now.month, now.day - 1);
-      final sleepResponse = await connector.readRecords(
-        HealthDataType.sleep.readInTimeRange(
-          startTime: yesterdayStart,
-          endTime: today,
-        ),
-      );
-      int sleepSeconds = 0;
-      for (final record in sleepResponse.records) {
-        if (record is SleepSessionRecord) {
-          sleepSeconds += record.endTime.difference(record.startTime).inSeconds;
-        }
-      }
+      final sleepResult = await _health!.getHealthDataFromTypes(yesterdayStart, today, [HealthDataType.SLEEP_ASLEEP]);
+      int sleepSeconds = sleepResult.fold<int>(0, (sum, point) => sum + point.value.toInt());
       _sleepHours = sleepSeconds / 3600;
 
       setState(() {});
@@ -553,9 +514,9 @@ class _HealthDashboardState extends State<HealthDashboard> {
   }
 
   void _refreshData() {
-    if (_connector != null && _isHealthSupported) {
+    if (_health != null && _isHealthSupported) {
       setState(() => _isLoading = true);
-      _fetchHealthData(_connector!).then((_) {
+      _fetchHealthData().then((_) {
         setState(() => _isLoading = false);
       });
     }
@@ -638,7 +599,6 @@ class _HealthDashboardState extends State<HealthDashboard> {
                 : SingleChildScrollView(
                     child: Column(
                       children: [
-                        // وضعیت آمادگی
                         Container(
                           width: double.infinity,
                           padding: const EdgeInsets.all(20),
@@ -655,7 +615,7 @@ class _HealthDashboardState extends State<HealthDashboard> {
                                 Padding(
                                   padding: const EdgeInsets.only(top: 8),
                                   child: Text(
-                                    '⚠️ Health Connect در دسترس نیست',
+                                    '⚠️ دسترسی به Health Connect داده نشده',
                                     style: TextStyle(fontSize: 12, color: Colors.white.withAlpha(200)),
                                   ),
                                 ),
@@ -664,7 +624,6 @@ class _HealthDashboardState extends State<HealthDashboard> {
                         ),
                         const SizedBox(height: 20),
 
-                        // کارت‌های سلامت (با دیتای واقعی)
                         Row(
                           children: [
                             Expanded(child: _buildHealthCard('قدم‌ها', _steps.toString(), 'گام', Icons.directions_walk)),
@@ -682,7 +641,6 @@ class _HealthDashboardState extends State<HealthDashboard> {
                         ),
                         const SizedBox(height: 20),
 
-                        // دکمه رفرش دستی
                         Row(
                           children: [
                             Expanded(
@@ -702,7 +660,6 @@ class _HealthDashboardState extends State<HealthDashboard> {
                         ),
                         const SizedBox(height: 10),
 
-                        // دکمه شروع معامله
                         Row(
                           children: [
                             Expanded(
@@ -853,7 +810,7 @@ class _ReadinessTestDialogState extends State<ReadinessTestDialog> {
   }
 }
 
-// ==================== چالش‌های روزانه (همون قبلی) ====================
+// ==================== چالش‌های روزانه ====================
 class DailyChallengesPage extends StatefulWidget {
   const DailyChallengesPage({super.key});
 
@@ -981,7 +938,7 @@ class _DailyChallengesPageState extends State<DailyChallengesPage> {
   }
 }
 
-// ==================== مدیتیشن (همون قبلی) ====================
+// ==================== مدیتیشن ====================
 class MeditationPage extends StatefulWidget {
   const MeditationPage({super.key});
 
@@ -1119,7 +1076,7 @@ class _MeditationPageState extends State<MeditationPage> {
   }
 }
 
-// ==================== مقایسه (همون قبلی) ====================
+// ==================== مقایسه ====================
 class ComparisonPage extends StatefulWidget {
   const ComparisonPage({super.key});
 
@@ -1257,7 +1214,7 @@ class _ComparisonPageState extends State<ComparisonPage> {
   }
 }
 
-// ==================== تنظیمات (همون قبلی) ====================
+// ==================== تنظیمات ====================
 class SettingsPage extends StatefulWidget {
   const SettingsPage({super.key});
 
