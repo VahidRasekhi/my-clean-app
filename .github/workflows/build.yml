@@ -13,22 +13,13 @@ jobs:
       
       - uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.22.0'
+          flutter-version: '3.27.0'
           channel: 'stable'
       
-      - name: Create new Flutter project
-        run: flutter create --project-name=my_app --org=com.example .
+      - run: flutter pub get
+      - run: flutter build apk --release
       
-      - name: Clean and get packages
-        run: |
-          flutter clean
-          flutter pub get
-      
-      - name: Build APK
-        run: flutter build apk --release
-      
-      - name: Upload APK
-        uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v4
         with:
-          name: my-app-apk
+          name: TraderHealth-App
           path: build/app/outputs/flutter-apk/app-release.apk
