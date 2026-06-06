@@ -1526,7 +1526,7 @@ class _SettingsPageState extends State<SettingsPage> {
                         subtitle: const Text('یادآوری برای قدم زدن و استراحت'),
                         value: _voiceReminders,
                         onChanged: (v) => setState(() => _voiceReminders = v),
-                        activeThumbColor: const Color(0xFFF9A825),
+                        activeTrackColor: const Color(0xFFF9A825),
                       ),
                       const Divider(),
 
@@ -1537,7 +1537,7 @@ class _SettingsPageState extends State<SettingsPage> {
                         ),
                         value: _physicalAlert,
                         onChanged: (v) => setState(() => _physicalAlert = v),
-                        activeThumbColor: const Color(0xFFF9A825),
+                        activeTrackColor: const Color(0xFFF9A825),
                       ),
                       const Divider(),
 
@@ -1552,7 +1552,7 @@ class _SettingsPageState extends State<SettingsPage> {
                             setState(() => _telegramId = '');
                           }
                         },
-                        activeThumbColor: const Color(0xFFF9A825),
+                        activeTrackColor: const Color(0xFFF9A825),
                       ),
                       if (_telegramId.isNotEmpty)
                         Padding(
