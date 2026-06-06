@@ -10,6 +10,7 @@ dependencies:
   flutter:
     sdk: flutter
   shared_preferences: ^2.2.2
+  health_connector: ^2.4.0          # پکیج جدید برای دیتای سلامت
 
 dev_dependencies:
   flutter_test:
