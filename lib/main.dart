@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:health_connector/health_connector.dart';
 import 'dart:async';
 
 void main() => runApp(const TradeHealthApp());
@@ -68,7 +69,7 @@ class TraderComparison {
   });
 }
 
-// ==================== صفحه احراز هویت ====================
+// ==================== صفحه احراز هویت (همون قبلی) ====================
 class AuthPage extends StatefulWidget {
   const AuthPage({super.key});
 
@@ -189,10 +190,7 @@ class _AuthPageState extends State<AuthPage> {
                             value: 'family',
                             child: Row(
                               children: [
-                                Icon(
-                                  Icons.family_restroom,
-                                  color: Colors.orange,
-                                ),
+                                Icon(Icons.family_restroom, color: Colors.orange),
                                 SizedBox(width: 10),
                                 Text('🟠 خانواده تریدر'),
                               ],
@@ -342,22 +340,10 @@ class _MainScreenState extends State<MainScreen> {
         selectedItemColor: const Color(0xFFF9A825),
         unselectedItemColor: Colors.grey,
         items: const [
-          BottomNavigationBarItem(
-            icon: Icon(Icons.dashboard),
-            label: 'داشبورد',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.emoji_events),
-            label: 'چالش',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.self_improvement),
-            label: 'مدیتیشن',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.compare_arrows),
-            label: 'مقایسه',
-          ),
+          BottomNavigationBarItem(icon: Icon(Icons.dashboard), label: 'داشبورد'),
+          BottomNavigationBarItem(icon: Icon(Icons.emoji_events), label: 'چالش'),
+          BottomNavigationBarItem(icon: Icon(Icons.self_improvement), label: 'مدیتیشن'),
+          BottomNavigationBarItem(icon: Icon(Icons.compare_arrows), label: 'مقایسه'),
           BottomNavigationBarItem(icon: Icon(Icons.settings), label: 'تنظیمات'),
         ],
       ),
@@ -384,24 +370,11 @@ class _MainScreenState extends State<MainScreen> {
                   const CircleAvatar(
                     radius: 35,
                     backgroundColor: Colors.white,
-                    child: Icon(
-                      Icons.person,
-                      size: 40,
-                      color: Color(0xFF0A0E21),
-                    ),
+                    child: Icon(Icons.person, size: 40, color: Color(0xFF0A0E21)),
                   ),
                   const SizedBox(height: 10),
-                  const Text(
-                    'کاربر گرامی',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  const Text(
-                    'تریدر حرفه‌ای',
-                    style: TextStyle(color: Colors.white70),
-                  ),
+                  const Text('کاربر گرامی', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                  const Text('تریدر حرفه‌ای', style: TextStyle(color: Colors.white70)),
                 ],
               ),
             ),
@@ -411,38 +384,21 @@ class _MainScreenState extends State<MainScreen> {
             _buildDrawerItem(Icons.compare_arrows, 'مقایسه با تریدرها', 3),
             _buildDrawerItem(Icons.settings, 'تنظیمات', 4),
             const Divider(color: Colors.grey),
-            _buildDrawerItem(
-              Icons.logout,
-              'خروج',
-              null,
-              isRed: true,
-              onTap: _logout,
-            ),
+            _buildDrawerItem(Icons.logout, 'خروج', null, isRed: true, onTap: _logout),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildDrawerItem(
-    IconData icon,
-    String title,
-    int? index, {
-    bool isRed = false,
-    VoidCallback? onTap,
-  }) {
+  Widget _buildDrawerItem(IconData icon, String title, int? index, {bool isRed = false, VoidCallback? onTap}) {
     return ListTile(
       leading: Icon(icon, color: isRed ? Colors.red : const Color(0xFFF9A825)),
-      title: Text(
-        title,
-        style: TextStyle(color: isRed ? Colors.red : Colors.white),
-      ),
-      onTap:
-          onTap ??
-          (() {
-            setState(() => _selectedIndex = index!);
-            Navigator.pop(context);
-          }),
+      title: Text(title, style: TextStyle(color: isRed ? Colors.red : Colors.white)),
+      onTap: onTap ?? (() {
+        setState(() => _selectedIndex = index!);
+        Navigator.pop(context);
+      }),
     );
   }
 
@@ -454,17 +410,11 @@ class _MainScreenState extends State<MainScreen> {
         title: const Text('خروج از حساب'),
         content: const Text('آیا مطمئنی میخوای خارج بشی؟'),
         actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('انصراف'),
-          ),
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('انصراف')),
           TextButton(
             onPressed: () {
               Navigator.pop(context);
-              Navigator.pushReplacement(
-                context,
-                MaterialPageRoute(builder: (context) => const AuthPage()),
-              );
+              Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => const AuthPage()));
             },
             child: const Text('خروج', style: TextStyle(color: Colors.red)),
           ),
@@ -474,9 +424,335 @@ class _MainScreenState extends State<MainScreen> {
   }
 }
 
+// ==================== صفحه داشبورد سلامت (با دیتای واقعی از Health Connect) ====================
+class HealthDashboard extends StatefulWidget {
+  const HealthDashboard({super.key});
+
+  @override
+  State<HealthDashboard> createState() => _HealthDashboardState();
+}
+
+class _HealthDashboardState extends State<HealthDashboard> {
+  HealthConnector? _connector;
+  bool _isHealthSupported = false;
+  bool _isLoading = true;
+
+  // دیتای واقعی
+  int _steps = 0;
+  int _heartRate = 0;
+  double _sleepHours = 0;
+  int _stressLevel = 5; // این رو از تست آمادگی میگیریم
+
+  @override
+  void initState() {
+    super.initState();
+    _initializeHealthConnector();
+  }
+
+  Future<void> _initializeHealthConnector() async {
+    setState(() => _isLoading = true);
+
+    try {
+      // 1. چک کردن اینکه Health Connect روی گوشی هست یا نه
+      final status = await HealthConnector.getHealthPlatformStatus();
+
+      if (status != HealthPlatformStatus.available) {
+        setState(() {
+          _isHealthSupported = false;
+          _isLoading = false;
+        });
+        return;
+      }
+
+      // 2. ساخت کانکتور
+      final config = HealthConnectorConfig();
+      final connector = await HealthConnector.create(config);
+
+      // 3. درخواست مجوز برای خوندن دیتاها
+      final permissions = [
+        HealthDataType.steps.readPermission,        // قدم
+        HealthDataType.heartRate.readPermission,    // ضربان قلب
+        HealthDataType.sleep.readPermission,        // خواب
+      ];
+
+      final results = await connector.requestPermissions(permissions);
+
+      final granted = results.every((r) => r.status != PermissionStatus.denied);
+
+      if (granted) {
+        _connector = connector;
+        _isHealthSupported = true;
+        await _fetchHealthData(connector);
+      } else {
+        _isHealthSupported = false;
+      }
+    } catch (e) {
+      print('Error initializing Health Connector: $e');
+      _isHealthSupported = false;
+    } finally {
+      setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _fetchHealthData(HealthConnector connector) async {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+
+    try {
+      // گرفتن قدم‌های امروز
+      final stepsResponse = await connector.readRecords(
+        HealthDataType.steps.readInTimeRange(
+          startTime: today,
+          endTime: now,
+        ),
+      );
+      _steps = stepsResponse.records.fold<int>(0, (sum, record) {
+        if (record is StepsRecord) {
+          return sum + (record.count.value as int);
+        }
+        return sum;
+      });
+
+      // گرفتن ضربان قلب امروز (میانگین)
+      final heartRateResponse = await connector.readRecords(
+        HealthDataType.heartRate.readInTimeRange(
+          startTime: today,
+          endTime: now,
+        ),
+      );
+      final heartRates = <double>[];
+      for (final record in heartRateResponse.records) {
+        if (record is HeartRateRecord) {
+          heartRates.add(record.bpm.value);
+        }
+      }
+      if (heartRates.isNotEmpty) {
+        _heartRate = (heartRates.reduce((a, b) => a + b) / heartRates.length).round();
+      }
+
+      // گرفتن خواب دیشب
+      final yesterdayStart = DateTime(now.year, now.month, now.day - 1);
+      final sleepResponse = await connector.readRecords(
+        HealthDataType.sleep.readInTimeRange(
+          startTime: yesterdayStart,
+          endTime: today,
+        ),
+      );
+      int sleepSeconds = 0;
+      for (final record in sleepResponse.records) {
+        if (record is SleepSessionRecord) {
+          sleepSeconds += record.endTime.difference(record.startTime).inSeconds;
+        }
+      }
+      _sleepHours = sleepSeconds / 3600;
+
+      setState(() {});
+    } catch (e) {
+      print('Error fetching health data: $e');
+    }
+  }
+
+  void _refreshData() {
+    if (_connector != null && _isHealthSupported) {
+      setState(() => _isLoading = true);
+      _fetchHealthData(_connector!).then((_) {
+        setState(() => _isLoading = false);
+      });
+    }
+  }
+
+  String getTradingAdvice() {
+    if (_sleepHours < 5) return "⛔ خواب کافی نداشتی، امروز معامله نکن!";
+    if (_stressLevel > 7) return "⚠️ استرس بالاست، حواست به تصمیمات احساسی باشه";
+    if (_sleepHours >= 7 && _stressLevel <= 3) return "✅ وضعیت عالی، آماده معاملات پر بازده";
+    return "⚠️ مراقب باش، شرایط متوسط هست";
+  }
+
+  Color getAdviceColor() {
+    if (_sleepHours < 5 || _stressLevel > 7) return Colors.red;
+    if (_sleepHours >= 7 && _stressLevel <= 3) return Colors.green;
+    return Colors.orange;
+  }
+
+  void _startTradeFlow() {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => ReadinessTestDialog(
+        onResult: (isReady, newStressLevel) {
+          setState(() {
+            _stressLevel = newStressLevel;
+          });
+          if (isReady) {
+            showDialog(
+              context: context,
+              builder: (ctx) => AlertDialog(
+                backgroundColor: const Color(0xFF0A0E21),
+                title: const Text('آماده معامله هستی!'),
+                content: const Text('برو جلو، به استراتژی خودت اعتماد کن. موفق باشی!'),
+                actions: [
+                  TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('باشه')),
+                ],
+              ),
+            );
+          } else {
+            showDialog(
+              context: context,
+              builder: (ctx) => AlertDialog(
+                backgroundColor: const Color(0xFF0A0E21),
+                title: const Text('یک قدم صبر کن'),
+                content: Text(_getAdviceMessage()),
+                actions: [
+                  TextButton(
+                    onPressed: () {
+                      Navigator.pop(ctx);
+                      Navigator.push(context, MaterialPageRoute(builder: (context) => const MeditationPage()));
+                    },
+                    child: const Text('برو مدیتیشن'),
+                  ),
+                ],
+              ),
+            );
+          }
+        },
+      ),
+    );
+  }
+
+  String _getAdviceMessage() {
+    if (_sleepHours < 5) return 'خواب کافی نداشتی. ذهنت خسته‌ست، بهتره اول یک چرت کوتاه بزنی.';
+    if (_stressLevel > 7) return 'استرست بالاست! تمرین تنفسی انجام بده تا ذهنت آروم بگیره.';
+    return 'به نظر میرسه الان شرایط مناسبی برای معامله نداری. یه قدم بزن، آب بنوش یا مدیتیشن کن و بعد برگرد.';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: SafeArea(
+        child: RefreshIndicator(
+          onRefresh: () async => _refreshData(),
+          child: Padding(
+            padding: const EdgeInsets.all(20),
+            child: _isLoading
+                ? const Center(child: CircularProgressIndicator())
+                : SingleChildScrollView(
+                    child: Column(
+                      children: [
+                        // وضعیت آمادگی
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(20),
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(colors: [getAdviceColor(), getAdviceColor().withAlpha(80)]),
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: Column(
+                            children: [
+                              const Text('وضعیت امروز برای معامله', style: TextStyle(fontSize: 18)),
+                              const SizedBox(height: 10),
+                              Text(getTradingAdvice(), style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+                              if (!_isHealthSupported)
+                                Padding(
+                                  padding: const EdgeInsets.only(top: 8),
+                                  child: Text(
+                                    '⚠️ Health Connect در دسترس نیست',
+                                    style: TextStyle(fontSize: 12, color: Colors.white.withAlpha(200)),
+                                  ),
+                                ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 20),
+
+                        // کارت‌های سلامت (با دیتای واقعی)
+                        Row(
+                          children: [
+                            Expanded(child: _buildHealthCard('قدم‌ها', _steps.toString(), 'گام', Icons.directions_walk)),
+                            const SizedBox(width: 15),
+                            Expanded(child: _buildHealthCard('ضربان قلب', _heartRate == 0 ? '---' : '$_heartRate', 'BPM', Icons.favorite)),
+                          ],
+                        ),
+                        const SizedBox(height: 15),
+                        Row(
+                          children: [
+                            Expanded(child: _buildHealthCard('خواب', _sleepHours.toStringAsFixed(1), 'ساعت', Icons.bedtime)),
+                            const SizedBox(width: 15),
+                            Expanded(child: _buildHealthCard('استرس', '$_stressLevel', '/10', Icons.psychology)),
+                          ],
+                        ),
+                        const SizedBox(height: 20),
+
+                        // دکمه رفرش دستی
+                        Row(
+                          children: [
+                            Expanded(
+                              child: OutlinedButton.icon(
+                                onPressed: _refreshData,
+                                icon: const Icon(Icons.refresh),
+                                label: const Text('بروزرسانی دیتا'),
+                                style: OutlinedButton.styleFrom(
+                                  foregroundColor: const Color(0xFFF9A825),
+                                  side: const BorderSide(color: Color(0xFFF9A825)),
+                                  padding: const EdgeInsets.symmetric(vertical: 12),
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 10),
+
+                        // دکمه شروع معامله
+                        Row(
+                          children: [
+                            Expanded(
+                              child: ElevatedButton.icon(
+                                onPressed: _startTradeFlow,
+                                icon: const Icon(Icons.trending_up),
+                                label: const Text('شروع معامله هوشمند'),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: const Color(0xFFF9A825),
+                                  foregroundColor: const Color(0xFF0A0E21),
+                                  padding: const EdgeInsets.symmetric(vertical: 15),
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildHealthCard(String title, String value, String unit, IconData icon) {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: const Color(0xFF0A0E21),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: const Color(0xFFF9A825).withAlpha(77)),
+      ),
+      child: Column(
+        children: [
+          Icon(icon, size: 35, color: const Color(0xFFF9A825)),
+          const SizedBox(height: 10),
+          Text(title, style: const TextStyle(color: Colors.grey)),
+          Text(value, style: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold)),
+          Text(unit, style: const TextStyle(color: Colors.grey)),
+        ],
+      ),
+    );
+  }
+}
+
 // ==================== تست آمادگی ذهنی ====================
 class ReadinessTestDialog extends StatefulWidget {
-  final Function(bool isReady) onResult;
+  final Function(bool isReady, int stressLevel) onResult;
 
   const ReadinessTestDialog({super.key, required this.onResult});
 
@@ -502,23 +778,13 @@ class _ReadinessTestDialogState extends State<ReadinessTestDialog> {
           children: [
             const Icon(Icons.psychology, size: 50, color: Color(0xFFF9A825)),
             const SizedBox(height: 15),
-            const Text(
-              'چقدر آماده‌ای؟',
-              style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-            ),
+            const Text('چقدر آماده‌ای؟', style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
             const SizedBox(height: 15),
 
-            // سطح استرس
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                const Text('سطح استرس:'),
-                Text(
-                  '$_stressLevel / 10',
-                  style: const TextStyle(color: Color(0xFFF9A825)),
-                ),
-              ],
-            ),
+            Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+              const Text('سطح استرس:'),
+              Text('$_stressLevel / 10', style: const TextStyle(color: Color(0xFFF9A825))),
+            ]),
             Slider(
               value: _stressLevel.toDouble(),
               min: 1,
@@ -529,7 +795,6 @@ class _ReadinessTestDialogState extends State<ReadinessTestDialog> {
             ),
             const SizedBox(height: 15),
 
-            // کیفیت خواب
             const Text('کیفیت خواب دیشب:'),
             SegmentedButton<String>(
               segments: const [
@@ -538,12 +803,10 @@ class _ReadinessTestDialogState extends State<ReadinessTestDialog> {
                 ButtonSegment(value: 'bad', label: Text('😫 بد')),
               ],
               selected: {_sleepQuality},
-              onSelectionChanged: (val) =>
-                  setState(() => _sleepQuality = val.first),
+              onSelectionChanged: (val) => setState(() => _sleepQuality = val.first),
             ),
             const SizedBox(height: 15),
 
-            // ژورنال نویسی
             CheckboxListTile(
               title: const Text('امروز ژورنال معاملاتی نوشتم؟'),
               value: _hasJournaled,
@@ -552,7 +815,6 @@ class _ReadinessTestDialogState extends State<ReadinessTestDialog> {
               controlAffinity: ListTileControlAffinity.leading,
             ),
 
-            // مدیتیشن
             CheckboxListTile(
               title: const Text('امروز مدیتیشن کردم؟'),
               value: _hasMeditated,
@@ -566,7 +828,7 @@ class _ReadinessTestDialogState extends State<ReadinessTestDialog> {
               onPressed: () {
                 int score = _calculateReadinessScore();
                 bool isReady = score >= 7;
-                widget.onResult(isReady);
+                widget.onResult(isReady, _stressLevel);
                 Navigator.pop(context);
               },
               style: ElevatedButton.styleFrom(
@@ -591,239 +853,7 @@ class _ReadinessTestDialogState extends State<ReadinessTestDialog> {
   }
 }
 
-// ==================== صفحه داشبورد سلامت (با دکمه معامله و تست آمادگی) ====================
-class HealthDashboard extends StatefulWidget {
-  const HealthDashboard({super.key});
-
-  @override
-  State<HealthDashboard> createState() => _HealthDashboardState();
-}
-
-class _HealthDashboardState extends State<HealthDashboard> {
-  final int _steps = 4500;
-  final int _heartRate = 72;
-  final double _sleepHours = 6.5;
-  final int _stressLevel = 7;
-
-  String getTradingAdvice() {
-    if (_sleepHours < 5) return "⛔ خواب کافی نداشتی، امروز معامله نکن!";
-    if (_stressLevel > 7) {
-      return "⚠️ استرس بالاست، حواست به تصمیمات احساسی باشه";
-    }
-    if (_sleepHours >= 7 && _stressLevel <= 3) {
-      return "✅ وضعیت عالی، آماده معاملات پر بازده";
-    }
-    return "⚠️ مراقب باش، شرایط متوسط هست";
-  }
-
-  Color getAdviceColor() {
-    if (_sleepHours < 5 || _stressLevel > 7) return Colors.red;
-    if (_sleepHours >= 7 && _stressLevel <= 3) return Colors.green;
-    return Colors.orange;
-  }
-
-  void _startTradeFlow() {
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (ctx) => ReadinessTestDialog(
-        onResult: (isReady) {
-          if (isReady) {
-            showDialog(
-              context: context,
-              builder: (ctx) => AlertDialog(
-                backgroundColor: const Color(0xFF0A0E21),
-                title: const Text('آماده معامله هستی!'),
-                content: const Text(
-                  'برو جلو، به استراتژی خودت اعتماد کن. موفق باشی!',
-                ),
-                actions: [
-                  TextButton(
-                    onPressed: () => Navigator.pop(ctx),
-                    child: const Text('باشه'),
-                  ),
-                ],
-              ),
-            );
-          } else {
-            showDialog(
-              context: context,
-              builder: (ctx) => AlertDialog(
-                backgroundColor: const Color(0xFF0A0E21),
-                title: const Text('یک قدم صبر کن'),
-                content: Text(_getAdviceMessage()),
-                actions: [
-                  TextButton(
-                    onPressed: () {
-                      Navigator.pop(ctx);
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => const MeditationPage(),
-                        ),
-                      );
-                    },
-                    child: const Text('برو مدیتیشن'),
-                  ),
-                ],
-              ),
-            );
-          }
-        },
-      ),
-    );
-  }
-
-  String _getAdviceMessage() {
-    if (_sleepHours < 5) {
-      return 'خواب کافی نداشتی. ذهنت خسته‌ست، بهتره اول یک چرت کوتاه بزنی.';
-    }
-    if (_stressLevel > 7) {
-      return 'استرست بالاست! تمرین تنفسی انجام بده تا ذهنت آروم بگیره.';
-    }
-    return 'به نظر میرسه الان شرایط مناسبی برای معامله نداری. یه قدم بزن، آب بنوش یا مدیتیشن کن و بعد برگرد.';
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(20),
-          child: SingleChildScrollView(
-            child: Column(
-              children: [
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(20),
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      colors: [
-                        getAdviceColor(),
-                        getAdviceColor().withAlpha(80),
-                      ],
-                    ),
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: Column(
-                    children: [
-                      const Text(
-                        'وضعیت امروز برای معامله',
-                        style: TextStyle(fontSize: 18),
-                      ),
-                      const SizedBox(height: 10),
-                      Text(
-                        getTradingAdvice(),
-                        style: const TextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 20),
-                Row(
-                  children: [
-                    Expanded(
-                      child: _buildHealthCard(
-                        'قدم‌ها',
-                        '$_steps',
-                        'گام',
-                        Icons.directions_walk,
-                      ),
-                    ),
-                    const SizedBox(width: 15),
-                    Expanded(
-                      child: _buildHealthCard(
-                        'ضربان قلب',
-                        '$_heartRate',
-                        'BPM',
-                        Icons.favorite,
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 15),
-                Row(
-                  children: [
-                    Expanded(
-                      child: _buildHealthCard(
-                        'خواب',
-                        '$_sleepHours',
-                        'ساعت',
-                        Icons.bedtime,
-                      ),
-                    ),
-                    const SizedBox(width: 15),
-                    Expanded(
-                      child: _buildHealthCard(
-                        'استرس',
-                        '$_stressLevel',
-                        '/10',
-                        Icons.psychology,
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 20),
-                Row(
-                  children: [
-                    Expanded(
-                      child: ElevatedButton.icon(
-                        onPressed: _startTradeFlow,
-                        icon: const Icon(Icons.trending_up),
-                        label: const Text('شروع معامله هوشمند'),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFFF9A825),
-                          foregroundColor: const Color(0xFF0A0E21),
-                          padding: const EdgeInsets.symmetric(vertical: 15),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(15),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildHealthCard(
-    String title,
-    String value,
-    String unit,
-    IconData icon,
-  ) {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: const Color(0xFF0A0E21),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: const Color(0xFFF9A825).withAlpha(77)),
-      ),
-      child: Column(
-        children: [
-          Icon(icon, size: 35, color: const Color(0xFFF9A825)),
-          const SizedBox(height: 10),
-          Text(title, style: const TextStyle(color: Colors.grey)),
-          Text(
-            value,
-            style: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold),
-          ),
-          Text(unit, style: const TextStyle(color: Colors.grey)),
-        ],
-      ),
-    );
-  }
-}
-
-// ==================== چالش‌های روزانه ====================
+// ==================== چالش‌های روزانه (همون قبلی) ====================
 class DailyChallengesPage extends StatefulWidget {
   const DailyChallengesPage({super.key});
 
@@ -845,41 +875,11 @@ class _DailyChallengesPageState extends State<DailyChallengesPage> {
   void _loadChallenges() {
     final today = DateTime.now();
     _challenges = [
-      Challenge(
-        id: '1',
-        title: 'نفس عمیق',
-        description: 'قبل از اولین معامله ۵ دقیقه نفس عمیق بکش',
-        points: 50,
-        date: today,
-      ),
-      Challenge(
-        id: '2',
-        title: 'قدم زدن',
-        description: 'حداقل ۱۰۰۰ قدم امروز بردار',
-        points: 100,
-        date: today,
-      ),
-      Challenge(
-        id: '3',
-        title: 'مدیتیشن',
-        description: '۵ دقیقه مدیتیشن کن',
-        points: 75,
-        date: today,
-      ),
-      Challenge(
-        id: '4',
-        title: 'ژورنال نویسی',
-        description: 'امروز ژورنال معاملاتی بنویس',
-        points: 150,
-        date: today,
-      ),
-      Challenge(
-        id: '5',
-        title: 'آب خوردن',
-        description: '۸ لیوان آب امروز بنوش',
-        points: 30,
-        date: today,
-      ),
+      Challenge(id: '1', title: 'نفس عمیق', description: 'قبل از اولین معامله ۵ دقیقه نفس عمیق بکش', points: 50, date: today),
+      Challenge(id: '2', title: 'قدم زدن', description: 'حداقل ۱۰۰۰ قدم امروز بردار', points: 100, date: today),
+      Challenge(id: '3', title: 'مدیتیشن', description: '۵ دقیقه مدیتیشن کن', points: 75, date: today),
+      Challenge(id: '4', title: 'ژورنال نویسی', description: 'امروز ژورنال معاملاتی بنویس', points: 150, date: today),
+      Challenge(id: '5', title: 'آب خوردن', description: '۸ لیوان آب امروز بنوش', points: 30, date: today),
     ];
   }
 
@@ -899,35 +899,21 @@ class _DailyChallengesPageState extends State<DailyChallengesPage> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text(
-                'چالش‌های امروز',
-                style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold),
-              ),
+              const Text('چالش‌های امروز', style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold)),
               const SizedBox(height: 8),
-              const Text(
-                'با انجام چالش‌ها امتیاز بگیر',
-                style: TextStyle(color: Colors.grey),
-              ),
+              const Text('با انجام چالش‌ها امتیاز بگیر', style: TextStyle(color: Colors.grey)),
               const SizedBox(height: 20),
               Container(
                 padding: const EdgeInsets.all(15),
                 decoration: BoxDecoration(
-                  gradient: const LinearGradient(
-                    colors: [Color(0xFFF9A825), Color(0xFF0A0E21)],
-                  ),
+                  gradient: const LinearGradient(colors: [Color(0xFFF9A825), Color(0xFF0A0E21)]),
                   borderRadius: BorderRadius.circular(15),
                 ),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     const Text('امتیاز شما:', style: TextStyle(fontSize: 18)),
-                    Text(
-                      '$_totalPoints',
-                      style: const TextStyle(
-                        fontSize: 24,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
+                    Text('$_totalPoints', style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
                   ],
                 ),
               ),
@@ -935,8 +921,7 @@ class _DailyChallengesPageState extends State<DailyChallengesPage> {
               Expanded(
                 child: ListView.builder(
                   itemCount: _challenges.length,
-                  itemBuilder: (context, index) =>
-                      _buildChallengeCard(_challenges[index]),
+                  itemBuilder: (context, index) => _buildChallengeCard(_challenges[index]),
                 ),
               ),
             ],
@@ -958,24 +943,9 @@ class _DailyChallengesPageState extends State<DailyChallengesPage> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    challenge.title,
-                    style: const TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  Text(
-                    challenge.description,
-                    style: TextStyle(color: Colors.grey.shade400, fontSize: 14),
-                  ),
-                  Text(
-                    '+${challenge.points} امتیاز',
-                    style: const TextStyle(
-                      color: Color(0xFFF9A825),
-                      fontSize: 12,
-                    ),
-                  ),
+                  Text(challenge.title, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                  Text(challenge.description, style: TextStyle(color: Colors.grey.shade400, fontSize: 14)),
+                  Text('+${challenge.points} امتیاز', style: const TextStyle(color: Color(0xFFF9A825), fontSize: 12)),
                 ],
               ),
             ),
@@ -1006,15 +976,12 @@ class _DailyChallengesPageState extends State<DailyChallengesPage> {
     await prefs.setInt('totalPoints', _totalPoints);
 
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('🎉 آفرین! ${challenge.points} امتیاز گرفتی'),
-        backgroundColor: Colors.green,
-      ),
+      SnackBar(content: Text('🎉 آفرین! ${challenge.points} امتیاز گرفتی'), backgroundColor: Colors.green),
     );
   }
 }
 
-// ==================== مدیتیشن ====================
+// ==================== مدیتیشن (همون قبلی) ====================
 class MeditationPage extends StatefulWidget {
   const MeditationPage({super.key});
 
@@ -1081,46 +1048,20 @@ class _MeditationPageState extends State<MeditationPage> {
                 height: _isMeditating ? 250 : 200,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  gradient: const LinearGradient(
-                    colors: [Color(0xFFF9A825), Color(0xFF0A0E21)],
-                  ),
-                  boxShadow: _isMeditating
-                      ? [
-                          BoxShadow(
-                            color: const Color(0xFFF9A825).withAlpha(128),
-                            blurRadius: 30,
-                            spreadRadius: 10,
-                          ),
-                        ]
-                      : [],
+                  gradient: const LinearGradient(colors: [Color(0xFFF9A825), Color(0xFF0A0E21)]),
+                  boxShadow: _isMeditating ? [BoxShadow(color: const Color(0xFFF9A825).withAlpha(128), blurRadius: 30, spreadRadius: 10)] : [],
                 ),
                 child: Center(
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       if (_isMeditating) ...[
-                        Text(
-                          _currentPhase,
-                          style: const TextStyle(
-                            fontSize: 24,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.white,
-                          ),
-                        ),
+                        Text(_currentPhase, style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.white)),
                         const SizedBox(height: 10),
-                        Text(
-                          '${(_secondsRemaining / 60).floor()}:${(_secondsRemaining % 60).toString().padLeft(2, '0')}',
-                          style: const TextStyle(
-                            fontSize: 20,
-                            color: Colors.white70,
-                          ),
-                        ),
+                        Text('${(_secondsRemaining / 60).floor()}:${(_secondsRemaining % 60).toString().padLeft(2, '0')}',
+                          style: const TextStyle(fontSize: 20, color: Colors.white70)),
                       ] else ...[
-                        const Icon(
-                          Icons.self_improvement,
-                          size: 80,
-                          color: Colors.white,
-                        ),
+                        const Icon(Icons.self_improvement, size: 80, color: Colors.white),
                       ],
                     ],
                   ),
@@ -1128,36 +1069,22 @@ class _MeditationPageState extends State<MeditationPage> {
               ),
               const SizedBox(height: 50),
               if (!_isMeditating) ...[
-                const Text(
-                  'تمرین تنفس ۵ دقیقه‌ای',
-                  style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-                ),
+                const Text('تمرین تنفس ۵ دقیقه‌ای', style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
                 const SizedBox(height: 10),
-                const Text(
-                  'دم ۴ ثانیه - نگه‌داری ۴ ثانیه - بازدم ۴ ثانیه',
-                  style: TextStyle(color: Colors.grey),
-                ),
+                const Text('دم ۴ ثانیه - نگه‌داری ۴ ثانیه - بازدم ۴ ثانیه', style: TextStyle(color: Colors.grey)),
                 const SizedBox(height: 30),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     _buildMeditationCard('🧘', 'مدیتیشن', '۱۰ دقیقه', () {}),
                     const SizedBox(width: 20),
-                    _buildMeditationCard(
-                      '🌊',
-                      'تنفس عمیق',
-                      '۵ دقیقه',
-                      _startBreathingExercise,
-                    ),
+                    _buildMeditationCard('🌊', 'تنفس عمیق', '۵ دقیقه', _startBreathingExercise),
                   ],
                 ),
               ] else ...[
                 ElevatedButton(
                   onPressed: _stopMeditation,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.red,
-                    foregroundColor: Colors.white,
-                  ),
+                  style: ElevatedButton.styleFrom(backgroundColor: Colors.red, foregroundColor: Colors.white),
                   child: const Text('پایان مدیتیشن'),
                 ),
               ],
@@ -1168,12 +1095,7 @@ class _MeditationPageState extends State<MeditationPage> {
     );
   }
 
-  Widget _buildMeditationCard(
-    String emoji,
-    String title,
-    String duration,
-    VoidCallback onTap,
-  ) {
+  Widget _buildMeditationCard(String emoji, String title, String duration, VoidCallback onTap) {
     return GestureDetector(
       onTap: onTap,
       child: Container(
@@ -1189,10 +1111,7 @@ class _MeditationPageState extends State<MeditationPage> {
             Text(emoji, style: const TextStyle(fontSize: 40)),
             const SizedBox(height: 10),
             Text(title, style: const TextStyle(fontWeight: FontWeight.bold)),
-            Text(
-              duration,
-              style: const TextStyle(fontSize: 12, color: Colors.grey),
-            ),
+            Text(duration, style: const TextStyle(fontSize: 12, color: Colors.grey)),
           ],
         ),
       ),
@@ -1200,7 +1119,7 @@ class _MeditationPageState extends State<MeditationPage> {
   }
 }
 
-// ==================== مقایسه ====================
+// ==================== مقایسه (همون قبلی) ====================
 class ComparisonPage extends StatefulWidget {
   const ComparisonPage({super.key});
 
@@ -1248,121 +1167,46 @@ class _ComparisonPageState extends State<ComparisonPage> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text(
-                        'مقایسه با تریدرهای دیگه',
-                        style: TextStyle(
-                          fontSize: 28,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
+                      const Text('مقایسه با تریدرهای دیگه', style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold)),
                       const SizedBox(height: 8),
-                      const Text(
-                        'ببین نسبت به بقیه تریدرها چطور هستی',
-                        style: TextStyle(color: Colors.grey),
-                      ),
+                      const Text('ببین نسبت به بقیه تریدرها چطور هستی', style: TextStyle(color: Colors.grey)),
                       const SizedBox(height: 30),
-
-                      _buildComparisonCard(
-                        'قدم روزانه',
-                        '${_comparison.userSteps}',
-                        '${_comparison.avgSteps}',
-                        Icons.directions_walk,
-                        _comparison.userSteps > _comparison.avgSteps,
-                      ),
+                      _buildComparisonCard('قدم روزانه', '${_comparison.userSteps}', '${_comparison.avgSteps}', Icons.directions_walk, _comparison.userSteps > _comparison.avgSteps),
                       const SizedBox(height: 15),
-
-                      _buildComparisonCard(
-                        'ساعت خواب',
-                        '${_comparison.userSleep}',
-                        '${_comparison.avgSleep}',
-                        Icons.bedtime,
-                        _comparison.userSleep >= _comparison.avgSleep,
-                      ),
+                      _buildComparisonCard('ساعت خواب', '${_comparison.userSleep}', '${_comparison.avgSleep}', Icons.bedtime, _comparison.userSleep >= _comparison.avgSleep),
                       const SizedBox(height: 15),
-
-                      _buildComparisonCard(
-                        'سطح استرس',
-                        '${_comparison.userStress}',
-                        '${_comparison.avgStress}',
-                        Icons.psychology,
-                        _comparison.userStress <= _comparison.avgStress,
-                      ),
+                      _buildComparisonCard('سطح استرس', '${_comparison.userStress}', '${_comparison.avgStress}', Icons.psychology, _comparison.userStress <= _comparison.avgStress),
                       const SizedBox(height: 15),
-
                       Card(
                         color: const Color(0xFF0A0E21),
                         child: Padding(
                           padding: const EdgeInsets.all(20),
                           child: Column(
                             children: [
-                              const Row(
-                                mainAxisAlignment:
-                                    MainAxisAlignment.spaceBetween,
-                                children: [
-                                  Text(
-                                    'ژورنال نویسی',
-                                    style: TextStyle(fontSize: 16),
-                                  ),
-                                  Text(
-                                    'مقایسه با دیگران',
-                                    style: TextStyle(color: Colors.grey),
-                                  ),
-                                ],
-                              ),
+                              const Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+                                Text('ژورنال نویسی', style: TextStyle(fontSize: 16)),
+                                Text('مقایسه با دیگران', style: TextStyle(color: Colors.grey)),
+                              ]),
                               const SizedBox(height: 15),
-                              Row(
-                                children: [
-                                  Expanded(
-                                    child: Column(
-                                      children: [
-                                        const Text(
-                                          'شما',
-                                          style: TextStyle(color: Colors.grey),
-                                        ),
-                                        const SizedBox(height: 5),
-                                        Icon(
-                                          _comparison.userJournal
-                                              ? Icons.check_circle
-                                              : Icons.cancel,
-                                          color: _comparison.userJournal
-                                              ? Colors.green
-                                              : Colors.red,
-                                        ),
-                                        const SizedBox(height: 5),
-                                        Text(
-                                          _comparison.userJournal
-                                              ? 'فعال'
-                                              : 'غیرفعال',
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                  Expanded(
-                                    child: Column(
-                                      children: [
-                                        const Text(
-                                          'سایر تریدرها',
-                                          style: TextStyle(color: Colors.grey),
-                                        ),
-                                        const SizedBox(height: 5),
-                                        Text(
-                                          '${_comparison.journalPercentage}%',
-                                          style: const TextStyle(
-                                            fontSize: 20,
-                                            fontWeight: FontWeight.bold,
-                                          ),
-                                        ),
-                                        const Text('ژورنال مینویسند'),
-                                      ],
-                                    ),
-                                  ),
-                                ],
-                              ),
+                              Row(children: [
+                                Expanded(child: Column(children: [
+                                  const Text('شما', style: TextStyle(color: Colors.grey)),
+                                  const SizedBox(height: 5),
+                                  Icon(_comparison.userJournal ? Icons.check_circle : Icons.cancel, color: _comparison.userJournal ? Colors.green : Colors.red),
+                                  const SizedBox(height: 5),
+                                  Text(_comparison.userJournal ? 'فعال' : 'غیرفعال'),
+                                ])),
+                                Expanded(child: Column(children: [
+                                  const Text('سایر تریدرها', style: TextStyle(color: Colors.grey)),
+                                  const SizedBox(height: 5),
+                                  Text('${_comparison.journalPercentage}%', style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+                                  const Text('ژورنال مینویسند'),
+                                ])),
+                              ]),
                             ],
                           ),
                         ),
                       ),
-
                       const SizedBox(height: 20),
                       Container(
                         padding: const EdgeInsets.all(15),
@@ -1371,21 +1215,11 @@ class _ComparisonPageState extends State<ComparisonPage> {
                           borderRadius: BorderRadius.circular(15),
                           border: Border.all(color: const Color(0xFFF9A825)),
                         ),
-                        child: Column(
-                          children: [
-                            const Icon(
-                              Icons.lightbulb,
-                              color: Color(0xFFF9A825),
-                              size: 30,
-                            ),
-                            const SizedBox(height: 10),
-                            Text(
-                              _getAdvice(),
-                              style: const TextStyle(fontSize: 16),
-                              textAlign: TextAlign.center,
-                            ),
-                          ],
-                        ),
+                        child: Column(children: [
+                          const Icon(Icons.lightbulb, color: Color(0xFFF9A825), size: 30),
+                          const SizedBox(height: 10),
+                          Text(_getAdvice(), style: const TextStyle(fontSize: 16), textAlign: TextAlign.center),
+                        ]),
                       ),
                     ],
                   ),
@@ -1395,82 +1229,35 @@ class _ComparisonPageState extends State<ComparisonPage> {
     );
   }
 
-  Widget _buildComparisonCard(
-    String title,
-    String userValue,
-    String avgValue,
-    IconData icon,
-    bool isBetter,
-  ) {
+  Widget _buildComparisonCard(String title, String userValue, String avgValue, IconData icon, bool isBetter) {
     return Card(
       color: const Color(0xFF0A0E21),
       child: Padding(
         padding: const EdgeInsets.all(20),
-        child: Column(
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Row(
-                  children: [
-                    Icon(icon, color: const Color(0xFFF9A825)),
-                    const SizedBox(width: 10),
-                    Text(title, style: const TextStyle(fontSize: 16)),
-                  ],
-                ),
-                Icon(
-                  isBetter ? Icons.arrow_upward : Icons.arrow_downward,
-                  color: isBetter ? Colors.green : Colors.red,
-                ),
-              ],
-            ),
-            const SizedBox(height: 15),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceAround,
-              children: [
-                Column(
-                  children: [
-                    const Text('شما', style: TextStyle(color: Colors.grey)),
-                    const SizedBox(height: 5),
-                    Text(
-                      userValue,
-                      style: const TextStyle(
-                        fontSize: 24,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ],
-                ),
-                Column(
-                  children: [
-                    const Text('میانگین', style: TextStyle(color: Colors.grey)),
-                    const SizedBox(height: 5),
-                    Text(avgValue, style: const TextStyle(fontSize: 20)),
-                  ],
-                ),
-              ],
-            ),
-          ],
-        ),
+        child: Column(children: [
+          Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+            Row(children: [Icon(icon, color: const Color(0xFFF9A825)), const SizedBox(width: 10), Text(title, style: const TextStyle(fontSize: 16))]),
+            Icon(isBetter ? Icons.arrow_upward : Icons.arrow_downward, color: isBetter ? Colors.green : Colors.red),
+          ]),
+          const SizedBox(height: 15),
+          Row(mainAxisAlignment: MainAxisAlignment.spaceAround, children: [
+            Column(children: [const Text('شما', style: TextStyle(color: Colors.grey)), const SizedBox(height: 5), Text(userValue, style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold))]),
+            Column(children: [const Text('میانگین', style: TextStyle(color: Colors.grey)), const SizedBox(height: 5), Text(avgValue, style: const TextStyle(fontSize: 20))]),
+          ]),
+        ]),
       ),
     );
   }
 
   String _getAdvice() {
-    if (_comparison.userSteps < _comparison.avgSteps) {
-      return '💡 قدم‌هات از میانگین کمتره! سعی کن روزی ۱۰۰۰ قدم بیشتر بربداری';
-    }
-    if (_comparison.userStress > _comparison.avgStress) {
-      return '🧘 استرست بالاتر از میانگینه! تمرینات تنفسی رو بیشتر انجام بده';
-    }
-    if (_comparison.userSleep < _comparison.avgSleep) {
-      return '😴 خواب کافی نداشتی! سعی کن زودتر بخوابی تا کیفیت معاملاتت بهتر بشه';
-    }
+    if (_comparison.userSteps < _comparison.avgSteps) return '💡 قدم‌هات از میانگین کمتره! سعی کن روزی ۱۰۰۰ قدم بیشتر بربداری';
+    if (_comparison.userStress > _comparison.avgStress) return '🧘 استرست بالاتر از میانگینه! تمرینات تنفسی رو بیشتر انجام بده';
+    if (_comparison.userSleep < _comparison.avgSleep) return '😴 خواب کافی نداشتی! سعی کن زودتر بخوابی تا کیفیت معاملاتت بهتر بشه';
     return '🎉 عالیه! داری بهتر از میانگین تریدرها عمل میکنی';
   }
 }
 
-// ==================== تنظیمات ====================
+// ==================== تنظیمات (همون قبلی) ====================
 class SettingsPage extends StatefulWidget {
   const SettingsPage({super.key});
 
@@ -1508,17 +1295,12 @@ class _SettingsPageState extends State<SettingsPage> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
-                  'تنظیمات',
-                  style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold),
-                ),
+                const Text('تنظیمات', style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold)),
                 const SizedBox(height: 30),
 
                 Card(
                   color: const Color(0xFF0A0E21),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(20),
-                  ),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
                   child: Column(
                     children: [
                       SwitchListTile(
@@ -1529,18 +1311,14 @@ class _SettingsPageState extends State<SettingsPage> {
                         activeTrackColor: const Color(0xFFF9A825),
                       ),
                       const Divider(),
-
                       SwitchListTile(
                         title: const Text('⚠️ هشدار فیزیکی'),
-                        subtitle: const Text(
-                          'لرزش و زنگ هشدار در شرایط بحرانی',
-                        ),
+                        subtitle: const Text('لرزش و زنگ هشدار در شرایط بحرانی'),
                         value: _physicalAlert,
                         onChanged: (v) => setState(() => _physicalAlert = v),
                         activeTrackColor: const Color(0xFFF9A825),
                       ),
                       const Divider(),
-
                       SwitchListTile(
                         title: const Text('📱 اتصال به تلگرام'),
                         subtitle: const Text('دریافت نوتیفیکیشن در تلگرام'),
@@ -1556,14 +1334,8 @@ class _SettingsPageState extends State<SettingsPage> {
                       ),
                       if (_telegramId.isNotEmpty)
                         Padding(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 16,
-                            vertical: 8,
-                          ),
-                          child: Text(
-                            'آیدی: $_telegramId',
-                            style: const TextStyle(color: Colors.green),
-                          ),
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                          child: Text('آیدی: $_telegramId', style: const TextStyle(color: Colors.green)),
                         ),
                     ],
                   ),
@@ -1578,9 +1350,7 @@ class _SettingsPageState extends State<SettingsPage> {
                     backgroundColor: const Color(0xFFF9A825),
                     foregroundColor: const Color(0xFF0A0E21),
                     minimumSize: const Size(double.infinity, 50),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(15),
-                    ),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
                   ),
                 ),
               ],
@@ -1599,25 +1369,16 @@ class _SettingsPageState extends State<SettingsPage> {
         title: const Text('اتصال به تلگرام'),
         content: TextField(
           onChanged: (v) => _telegramId = v,
-          decoration: const InputDecoration(
-            hintText: '@username',
-            border: OutlineInputBorder(),
-          ),
+          decoration: const InputDecoration(hintText: '@username', border: OutlineInputBorder()),
         ),
         actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('انصراف'),
-          ),
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('انصراف')),
           TextButton(
             onPressed: () {
               setState(() {});
               Navigator.pop(context);
             },
-            child: const Text(
-              'ذخیره',
-              style: TextStyle(color: Color(0xFFF9A825)),
-            ),
+            child: const Text('ذخیره', style: TextStyle(color: Color(0xFFF9A825))),
           ),
         ],
       ),
@@ -1631,10 +1392,7 @@ class _SettingsPageState extends State<SettingsPage> {
     await prefs.setString('telegramId', _telegramId);
 
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('تنظیمات ذخیره شد'),
-        backgroundColor: Colors.green,
-      ),
+      const SnackBar(content: Text('تنظیمات ذخیره شد'), backgroundColor: Colors.green),
     );
   }
 }
