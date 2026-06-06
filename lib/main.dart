@@ -433,9 +433,9 @@ class HealthDashboard extends StatefulWidget {
 }
 
 class _HealthDashboardState extends State<HealthDashboard> {
-  HealthFactory? _health;
-  bool _isHealthSupported = false;
+  final HealthFactory _health = HealthFactory();
   bool _isLoading = true;
+  bool _hasPermission = false;
 
   // دیتای واقعی
   int _steps = 0;
@@ -446,65 +446,56 @@ class _HealthDashboardState extends State<HealthDashboard> {
   @override
   void initState() {
     super.initState();
-    _initializeHealth();
+    _initHealth();
   }
 
-  Future<void> _initializeHealth() async {
-    setState(() => _isLoading = true);
-
+  Future<void> _initHealth() async {
     try {
-      // درخواست مجوزها
+      // درخواست مجوز برای خواندن قدم، ضربان قلب و خواب
       final types = [
         HealthDataType.STEPS,
         HealthDataType.HEART_RATE,
         HealthDataType.SLEEP_ASLEEP,
       ];
-
       final permissions = [
         HealthDataAccess.READ,
         HealthDataAccess.READ,
         HealthDataAccess.READ,
       ];
 
-      _health = HealthFactory();
-      final granted = await _health!.requestAuthorization(types, permissions: permissions);
+      final granted = await _health.requestAuthorization(types, permissions: permissions);
 
       if (granted) {
-        _isHealthSupported = true;
-        await _fetchHealthData();
-      } else {
-        _isHealthSupported = false;
+        _hasPermission = true;
+        await _fetchAllHealthData();
       }
     } catch (e) {
       print('Error initializing Health: $e');
-      _isHealthSupported = false;
     } finally {
       setState(() => _isLoading = false);
     }
   }
 
-  Future<void> _fetchHealthData() async {
-    if (_health == null || !_isHealthSupported) return;
-
+  Future<void> _fetchAllHealthData() async {
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
+    final yesterdayStart = DateTime(now.year, now.month, now.day - 1);
 
     try {
       // گرفتن قدم‌های امروز
-      final stepsResult = await _health!.getHealthDataFromTypes(today, now, [HealthDataType.STEPS]);
-      _steps = stepsResult.fold<int>(0, (sum, point) => sum + point.value.toInt());
+      final stepsData = await _health.getHealthDataFromTypes(today, now, [HealthDataType.STEPS]);
+      _steps = stepsData.fold<int>(0, (sum, point) => sum + point.value.toInt());
 
       // گرفتن ضربان قلب امروز (میانگین)
-      final heartRateResult = await _health!.getHealthDataFromTypes(today, now, [HealthDataType.HEART_RATE]);
-      if (heartRateResult.isNotEmpty) {
-        double avgHeartRate = heartRateResult.fold<double>(0, (sum, point) => sum + point.value) / heartRateResult.length;
-        _heartRate = avgHeartRate.round();
+      final heartRateData = await _health.getHealthDataFromTypes(today, now, [HealthDataType.HEART_RATE]);
+      if (heartRateData.isNotEmpty) {
+        double avg = heartRateData.fold<double>(0, (sum, point) => sum + point.value) / heartRateData.length;
+        _heartRate = avg.round();
       }
 
       // گرفتن خواب دیشب
-      final yesterdayStart = DateTime(now.year, now.month, now.day - 1);
-      final sleepResult = await _health!.getHealthDataFromTypes(yesterdayStart, today, [HealthDataType.SLEEP_ASLEEP]);
-      int sleepSeconds = sleepResult.fold<int>(0, (sum, point) => sum + point.value.toInt());
+      final sleepData = await _health.getHealthDataFromTypes(yesterdayStart, today, [HealthDataType.SLEEP_ASLEEP]);
+      int sleepSeconds = sleepData.fold<int>(0, (sum, point) => sum + point.value.toInt());
       _sleepHours = sleepSeconds / 3600;
 
       setState(() {});
@@ -514,12 +505,10 @@ class _HealthDashboardState extends State<HealthDashboard> {
   }
 
   void _refreshData() {
-    if (_health != null && _isHealthSupported) {
-      setState(() => _isLoading = true);
-      _fetchHealthData().then((_) {
-        setState(() => _isLoading = false);
-      });
-    }
+    setState(() => _isLoading = true);
+    _fetchAllHealthData().then((_) {
+      setState(() => _isLoading = false);
+    });
   }
 
   String getTradingAdvice() {
@@ -611,7 +600,7 @@ class _HealthDashboardState extends State<HealthDashboard> {
                               const Text('وضعیت امروز برای معامله', style: TextStyle(fontSize: 18)),
                               const SizedBox(height: 10),
                               Text(getTradingAdvice(), style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-                              if (!_isHealthSupported)
+                              if (!_hasPermission)
                                 Padding(
                                   padding: const EdgeInsets.only(top: 8),
                                   child: Text(
